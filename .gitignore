@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Data
+*.csv
+*.xlsx
+*.json
+!mf_analysis/data/fund_metadata.json
+
+# IDEs
+.vscode/
+.idea/
+.ipynb_checkpoints/
+
+# Streamlit
+.streamlit/
