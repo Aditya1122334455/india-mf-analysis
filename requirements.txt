@@ -6,3 +6,5 @@ yfinance
 mftool
 scipy
 statsmodels
+deprecated
+requests
