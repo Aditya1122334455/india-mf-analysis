@@ -59,22 +59,10 @@ class MFDataFetcher:
             return pd.DataFrame()
 
     def get_fund_info(self, amfi_code):
-        """Get detailed info about a fund, merging with local metadata if available."""
+        """Get detailed info about a fund."""
         try:
-            import json
-            import os
-            
             info = self.mf.get_scheme_details(amfi_code)
-            
-            # Load local metadata for extra details (AUM, Expense Ratio, Managers)
-            meta_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'fund_metadata.json')
-            if os.path.exists(meta_path):
-                with open(meta_path, 'r') as f:
-                    metadata = json.load(f)
-                    if str(amfi_code) in metadata:
-                        info.update(metadata[str(amfi_code)])
-            
-            return info
+            return info if info else {}
         except Exception as e:
             print(f"Error fetching details for {amfi_code}: {e}")
             return {}

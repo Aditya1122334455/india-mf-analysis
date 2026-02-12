@@ -63,9 +63,25 @@ with st.sidebar:
     risk_free_rate = st.slider("Risk Free Rate (%)", 0.0, 10.0, 6.5, 0.1) / 100
     analytics.rf = risk_free_rate
     
-    bench_option = st.selectbox("Benchmark", ["^NSEI (Nifty 50)", "^CRSLDX (Nifty 500)"], index=0)
-    benchmark_ticker = bench_option.split(" ")[0]
-    benchmark_name = bench_option.split("(")[1].replace(")", "")
+    bench_type = st.radio("Benchmark Type", ["Index", "Mutual Fund"], horizontal=True)
+    
+    benchmark_code = None
+    benchmark_name = "Benchmark"
+    benchmark_ticker = None
+
+    if bench_type == "Index":
+        bench_option = st.selectbox("Select Index", ["^NSEI (Nifty 50)", "^CRSLDX (Nifty 500)"], index=0)
+        benchmark_ticker = bench_option.split(" ")[0]
+        benchmark_name = bench_option.split("(")[1].replace(")", "")
+    else:
+        bench_search = st.text_input("Search Benchmark Fund", placeholder="e.g. Parag Parikh")
+        if bench_search:
+            bench_results = fetcher.search_funds(bench_search)
+            if bench_results:
+                benchmark_name = st.selectbox("Select Benchmark Fund", options=list(bench_results.values()))
+                benchmark_code = [k for k, v in bench_results.items() if v == benchmark_name][0]
+            else:
+                st.error("No benchmark funds found.")
     
     st.markdown("---")
     st.header("⏳ Time Horizon")
@@ -84,7 +100,17 @@ if selected_code:
         if not raw_nav_data.empty:
             # Determine start date for benchmark based on available fund history
             raw_start_date = raw_nav_data.index[0]
-            raw_bench_data = fetcher.get_benchmark_history(benchmark_ticker, start_date=raw_start_date)
+            
+            if bench_type == "Index":
+                raw_bench_data = fetcher.get_benchmark_history(benchmark_ticker, start_date=raw_start_date)
+            else:
+                if benchmark_code:
+                    if benchmark_code == selected_code:
+                        st.warning("Comparing a fund against itself. Benchmark data will be identical.")
+                    raw_bench_data_df = fetcher.get_nav_history(benchmark_code)
+                    raw_bench_data = raw_bench_data_df['nav'] if not raw_bench_data_df.empty else pd.Series()
+                else:
+                    raw_bench_data = pd.Series()
             
             # Apply Time Period Filtering
             nav_data = raw_nav_data.copy()
@@ -100,16 +126,8 @@ if selected_code:
     if not raw_nav_data.empty:
         # Fund Title & Stats Summary
         st.markdown(f"### {selected_name}")
-        st.caption(f"**{fund_info.get('scheme_type')}** | {fund_info.get('scheme_category')} | {fund_info.get('fund_house')}")
-        
-        # Fund Essentials Row - Compact
-        if fund_info.get('aum') or fund_info.get('expense_ratio_direct'):
-            e_col1, e_col2, e_col3, e_col4 = st.columns(4)
-            e_col1.caption(f"**💰 AUM**\n{fund_info.get('aum', 'N/A')}")
-            e_col2.caption(f"**📉 Exp. Ratio**\n{fund_info.get('expense_ratio_direct', 'N/A')}")
-            e_col3.caption(f"**👤 Managers**\n{fund_info.get('fund_managers', 'N/A')}")
-            e_col4.caption(f"**🚪 Exit Load**\n{fund_info.get('exit_load', 'N/A')}")
-            st.markdown("---")
+        st.caption(f"**{fund_info.get('scheme_type', 'N/A')}** | {fund_info.get('scheme_category', 'N/A')} | {fund_info.get('fund_house', 'N/A')}")
+        st.markdown("---")
 
         # Top Level Metrics - Single Row
         metrics = analytics.calculate_risk_metrics(nav_data['nav'])
@@ -196,14 +214,17 @@ if selected_code:
         
         for label, yrs in periods.items():
             f_ret, f_vol, f_stats = get_stats_for_period(raw_nav_data['nav'], yrs, raw_bench_data)
-            # Fetch benchmark stats independently of fund history
-            b_target_date = raw_bench_data.index[-1] - pd.DateOffset(years=yrs)
-            try:
-                b_subset = raw_bench_data.loc[raw_bench_data.index >= b_target_date]
-                b_ret = (b_subset.iloc[-1] / b_subset.iloc[0]) ** (1/yrs) - 1 if len(b_subset) > 20 else None
-                b_vol = b_subset.pct_change().std() * np.sqrt(252) if len(b_subset) > 20 else None
-            except:
-                b_ret, b_vol = None, None
+            
+            b_ret, b_vol = None, None
+            if not raw_bench_data.empty and len(raw_bench_data) > 0:
+                try:
+                    b_target_date = raw_bench_data.index[-1] - pd.DateOffset(years=yrs)
+                    b_subset = raw_bench_data.loc[raw_bench_data.index >= b_target_date]
+                    if len(b_subset) > 20:
+                        b_ret = (b_subset.iloc[-1] / b_subset.iloc[0]) ** (1/yrs) - 1
+                        b_vol = b_subset.pct_change().std() * np.sqrt(252)
+                except:
+                    pass
             
             # Data for compact sections
             ret_data.append({"Period": label, "Fund": f_ret, f"{benchmark_name}": b_ret})
@@ -316,4 +337,3 @@ if selected_code:
 
 else:
     st.info("👈 Enter a fund name (e.g., 'HDFC Flexi' or 'SBI Bluechip') to begin deep analysis.")
-    st.image("https://www.advisorkhoj.com/images/mf-research-bg.jpg", width=800)
