@@ -53,7 +53,15 @@ with st.sidebar:
     if search_query:
         search_results = fetcher.search_funds(search_query)
         if search_results:
-            selected_name = st.selectbox("Matching Schemes", options=list(search_results.values()))
+            schemes = list(search_results.values())
+            # Find index of "Direct Plan - Growth" or similar
+            default_ix = 0
+            for i, name in enumerate(schemes):
+                if "Direct" in name and "Growth" in name:
+                    default_ix = i
+                    break
+            
+            selected_name = st.selectbox("Matching Schemes", options=schemes, index=default_ix)
             selected_code = [k for k, v in search_results.items() if v == selected_name][0]
         else:
             st.error("No funds found.")
@@ -87,9 +95,18 @@ with st.sidebar:
     st.header("⏳ Time Horizon")
     analysis_period = st.radio(
         "Select Analysis Period",
-        ["All Time", "1 Year", "3 Years", "5 Years", "10 Years"],
+        ["All Time", "1 Year", "3 Years", "5 Years", "10 Years", "Custom Range"],
         index=0
     )
+    
+    custom_start_date = None
+    custom_end_date = None
+    if analysis_period == "Custom Range":
+        c1, c2 = st.columns(2)
+        with c1:
+            custom_start_date = st.date_input("Start Date", value=pd.to_datetime("2020-01-01"))
+        with c2:
+            custom_end_date = st.date_input("End Date", value=pd.to_datetime("today"))
 
 # Main Content
 if selected_code:
@@ -116,12 +133,23 @@ if selected_code:
             nav_data = raw_nav_data.copy()
             bench_data = raw_bench_data.copy() if not raw_bench_data.empty else pd.Series()
             
-            if analysis_period != "All Time":
+            if analysis_period == "Custom Range":
+                if custom_start_date and custom_end_date:
+                    start_ts = pd.Timestamp(custom_start_date)
+                    end_ts = pd.Timestamp(custom_end_date)
+                    nav_data = nav_data[(nav_data.index >= start_ts) & (nav_data.index <= end_ts)]
+                    if not bench_data.empty:
+                        bench_data = bench_data[(bench_data.index >= start_ts) & (bench_data.index <= end_ts)]
+            elif analysis_period != "All Time":
                 years = int(analysis_period.split(" ")[0])
                 cutoff_date = nav_data.index[-1] - pd.DateOffset(years=years)
                 nav_data = nav_data[nav_data.index >= cutoff_date]
                 if not bench_data.empty:
                     bench_data = bench_data[bench_data.index >= cutoff_date]
+            
+            if nav_data.empty:
+                st.error("No data available for the selected range. Please adjust your dates or time horizon.")
+                st.stop()
 
     if not raw_nav_data.empty:
         # Fund Title & Stats Summary
@@ -140,12 +168,18 @@ if selected_code:
         
         # Determine if we should show 'Since Inception' or the selected period
         is_si = False
-        if analysis_period != "All Time":
-            req_yrs = int(analysis_period.split(" ")[0])
-            if actual_yrs < (req_yrs - 0.1): # If significantly shorter than requested
-                is_si = True
+        if analysis_period == "Custom Range":
+            display_label = f"Custom (~{actual_yrs:.1f}Y)"
+        elif analysis_period != "All Time":
+            try:
+                req_yrs = int(analysis_period.split(" ")[0])
+                if actual_yrs < (req_yrs - 0.1): # If significantly shorter than requested
+                    is_si = True
+            except:
+                pass
         
-        display_label = f"S.I. (~{actual_yrs:.1f}Y)" if (is_si or analysis_period == "All Time") else analysis_period
+        if analysis_period != "Custom Range":
+            display_label = f"S.I. (~{actual_yrs:.1f}Y)" if (is_si or analysis_period == "All Time") else analysis_period
 
         m_col0, m_col1, m_col2, m_col3, m_col4 = st.columns(5)
         m_col0.metric(f"Growth ({display_label})", f"{multiplier:.2f}x")
@@ -160,6 +194,37 @@ if selected_code:
             st.plotly_chart(plot_benchmark_comparison(nav_data['nav'], bench_data, selected_name, benchmark_name), width='stretch', key="main_perf_comparison")
         else:
             st.plotly_chart(plot_nav_history(nav_data, selected_name), width='stretch', key="main_nav_history")
+
+        # 1b. Calendar Year Returns
+        st.markdown("### 📅 Calendar Year Performance")
+        f_cal = analytics.calculate_calendar_returns(raw_nav_data['nav'])
+        if not raw_bench_data.empty:
+            b_cal = analytics.calculate_calendar_returns(raw_bench_data)
+            cal_df = pd.DataFrame({'Fund': f_cal, benchmark_name: b_cal})
+        else:
+            cal_df = pd.DataFrame({'Fund': f_cal})
+        
+        # Sort and limit to last 10 entries
+        cal_df = cal_df.sort_index(ascending=False).head(11) # To show roughly 10 years + current YTD
+        
+        cal_c1, cal_c2 = st.columns([1, 1.8])
+        with cal_c1:
+            # Display table with formatting
+            disp_cal = cal_df.copy()
+            for col in disp_cal.columns:
+                disp_cal[col] = disp_cal[col].apply(lambda x: f"{x:.1%}" if pd.notnull(x) else "-")
+            st.dataframe(disp_cal, width='stretch', use_container_width=True)
+            
+        with cal_c2:
+            # Display comparative bar chart
+            plot_cal_df = cal_df.reset_index().rename(columns={'index': 'Year'}).melt(id_vars='Year', var_name='Type', value_name='Return')
+            fig_cal = px.bar(plot_cal_df, x='Year', y='Return', color='Type', barmode='group',
+                             color_discrete_sequence=['#1f77b4', '#ff7f0e'],
+                             labels={'Return': 'Annual Return', 'Year': ''},
+                             height=350)
+            fig_cal.update_layout(margin=dict(l=0, r=0, t=20, b=0), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            fig_cal.update_yaxes(tickformat=".0%")
+            st.plotly_chart(fig_cal, width='stretch', key="calendar_year_chart")
 
         # 2. Drawdown History
         drawdown_series, _ = analytics.calculate_drawdowns(nav_data['nav'])
@@ -202,6 +267,7 @@ if selected_code:
                             'R-Squared': ab['r_squared'],
                             'InfoRatio': ab.get('info_ratio', 0),
                             'BattingAvg': ab.get('batting_average', 0),
+                            'Sharpe': rm.get('sharpe_ratio', 0),
                             'Sortino': rm.get('sortino_ratio', 0),
                             'DownsideDev': rm.get('downside_deviation', 0),
                             'Calmar': rm.get('calmar_ratio', 0),
@@ -245,10 +311,11 @@ if selected_code:
                     "Period": label,
                     "Jensen Alpha": f"{f_stats['Alpha']:.1%}",
                     "Beta": f"{f_stats['Beta']:.2f}",
+                    "Sharpe": f"{f_stats['Sharpe']:.2f}",
+                    "Sortino": f"{f_stats['Sortino']:.2f}",
+                    "Calmar": f"{f_stats['Calmar']:.2f}",
                     "Info Ratio": f"{f_stats['InfoRatio']:.2f}",
                     "Batting Avg": f"{f_stats['BattingAvg']:.1f}%",
-                    "Calmar": f"{f_stats['Calmar']:.2f}",
-                    "Sortino": f"{f_stats['Sortino']:.2f}",
                     "Omega": f"{f_stats['Omega']:.2f}",
                     "Hurst (H)": f"{f_stats['Hurst']:.2f}",
                     "Upside Cap": f"{f_stats['Upside']:.1f}%",
@@ -299,8 +366,22 @@ if selected_code:
                 st.plotly_chart(plot_capture_ratios(cap_metrics), width='stretch', key="capture_ratios_summary")
         
         if deep_metrics:
-            st.markdown("#### Historical Performance Metrics")
-            st.dataframe(pd.DataFrame(deep_metrics), hide_index=True, width='stretch')
+            st.markdown("#### 📜 Detailed Analysis Reports")
+            df_full = pd.DataFrame(deep_metrics)
+            
+            t1, t2 = st.tabs(["🎯 Efficiency & Skill", "⚖️ Market Character"])
+            
+            with t1:
+                # Group 1: Risk-Adjusted Efficiency
+                efficiency_cols = ["Period", "Sharpe", "Sortino", "Calmar", "Info Ratio", "Jensen Alpha", "Batting Avg"]
+                st.dataframe(df_full[efficiency_cols], hide_index=True, width='stretch')
+                st.caption("Focuses on how much return the fund generated per unit of risk taken.")
+                
+            with t2:
+                # Group 2: Behavioral & Market Character
+                behavior_cols = ["Period", "Beta", "Hurst (H)", "Omega", "Upside Cap", "Downside Cap"]
+                st.dataframe(df_full[behavior_cols], hide_index=True, width='stretch')
+                st.caption("Focuses on how the fund behaves relative to the market and its trend intensity.")
         
         # 4. Rolling Returns Profile
         st.markdown("---")

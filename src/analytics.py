@@ -240,6 +240,29 @@ class MFAnalytics:
         if nav_series.empty: return 1.0
         return nav_series.iloc[-1] / nav_series.iloc[0]
 
+    def calculate_calendar_returns(self, nav_series):
+        """Calculate calendar year returns including YTD."""
+        if nav_series.empty:
+            return pd.Series()
+        
+        # Get year-end values
+        yearly_nav = nav_series.resample('YE').last()
+        
+        # If the last date in nav_series is not the same as the last date in yearly_nav,
+        # it means the current year is still in progress (YTD).
+        # But resample('YE').last() already includes the last available point for the current year.
+        
+        returns = yearly_nav.pct_change()
+        
+        # Calculate the first year's return separately since pct_change puts NaN there
+        # but the first year might be a partial year.
+        if not yearly_nav.empty:
+            first_actual_nav = nav_series.iloc[0]
+            returns.iloc[0] = (yearly_nav.iloc[0] / first_actual_nav) - 1
+            
+        returns.index = returns.index.year
+        return returns
+
     def calculate_rolling_return_profile(self, nav_series):
         """Calculate profile-like stats for standard time horizons."""
         profile = {}
