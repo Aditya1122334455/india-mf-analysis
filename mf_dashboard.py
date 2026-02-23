@@ -200,7 +200,13 @@ if selected_code:
                             'Alpha': ab['alpha'],
                             'Beta': ab['beta'],
                             'R-Squared': ab['r_squared'],
+                            'InfoRatio': ab.get('info_ratio', 0),
+                            'BattingAvg': ab.get('batting_average', 0),
                             'Sortino': rm.get('sortino_ratio', 0),
+                            'DownsideDev': rm.get('downside_deviation', 0),
+                            'Calmar': rm.get('calmar_ratio', 0),
+                            'Omega': rm.get('omega_ratio', 0),
+                            'Hurst': rm.get('hurst_exponent', 0.5),
                             'Upside': cap['upside'],
                             'Downside': cap['downside']
                         }
@@ -237,10 +243,14 @@ if selected_code:
             if f_stats:
                 deep_metrics.append({
                     "Period": label,
-                    "Alpha": f"{f_stats['Alpha']:.1%}",
+                    "Jensen Alpha": f"{f_stats['Alpha']:.1%}",
                     "Beta": f"{f_stats['Beta']:.2f}",
-                    "R2": f"{f_stats['R-Squared']:.1%}",
+                    "Info Ratio": f"{f_stats['InfoRatio']:.2f}",
+                    "Batting Avg": f"{f_stats['BattingAvg']:.1f}%",
+                    "Calmar": f"{f_stats['Calmar']:.2f}",
                     "Sortino": f"{f_stats['Sortino']:.2f}",
+                    "Omega": f"{f_stats['Omega']:.2f}",
+                    "Hurst (H)": f"{f_stats['Hurst']:.2f}",
                     "Upside Cap": f"{f_stats['Upside']:.1f}%",
                     "Downside Cap": f"{f_stats['Downside']:.1f}%"
                 })

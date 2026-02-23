@@ -34,8 +34,31 @@ class MFAnalytics:
         rolling_returns = (nav_series / nav_series.shift(window)) ** (1 / window_years) - 1
         return rolling_returns.dropna()
 
+    def calculate_downside_deviation(self, nav_series):
+        """
+        Calculate Downside Risk as requested:
+        X = Returns below zero
+        Y = Sum of all squares of X
+        Z = Y / number of days taken for computing the ratio
+        Downside risk = Square root of Z
+        Annualized = Downside risk * sqrt(252)
+        """
+        if nav_series.empty or len(nav_series) < 2:
+            return 0.0
+            
+        returns = nav_series.pct_change().dropna()
+        if returns.empty:
+            return 0.0
+            
+        x = returns[returns < 0]
+        y = (x**2).sum()
+        z = y / len(returns)
+        
+        downside_risk_daily = np.sqrt(z)
+        return downside_risk_daily * np.sqrt(252) # Annualized
+
     def calculate_risk_metrics(self, nav_series):
-        """Calculate Sharpe, Sortino, and Volatility."""
+        """Calculate Sharpe, Sortino, Volatility, Downside Deviation, Calmar, and Omega."""
         if nav_series.empty or len(nav_series) < 2:
             return {}
             
@@ -45,20 +68,56 @@ class MFAnalytics:
             
         volatility = returns.std() * np.sqrt(252)
         mean_return = returns.mean() * 252
+        cagr = self.calculate_cagr(nav_series)
         
         excess_return = mean_return - self.rf
         sharpe = excess_return / volatility if volatility != 0 else 0
         
-        downside_returns = returns[returns < 0]
-        downside_vol = downside_returns.std() * np.sqrt(252)
-        sortino = excess_return / downside_vol if downside_vol != 0 else 0
+        downside_dev = self.calculate_downside_deviation(nav_series)
+        sortino = excess_return / downside_dev if downside_dev != 0 else 0
+        
+        # Calmar Ratio
+        _, max_dd = self.calculate_drawdowns(nav_series)
+        calmar = (cagr / abs(max_dd)) if max_dd != 0 else 0
+        
+        # Omega Ratio (simplified for threshold self.rf/252)
+        # Ratio of probability-weighted gains vs losses
+        threshold = self.rf / 252
+        gains = returns[returns > threshold].sum()
+        losses = abs(returns[returns <= threshold].sum())
+        omega = gains / losses if losses != 0 else 0
+
+        hurst = self.calculate_hurst(nav_series)
         
         return {
             "volatility": volatility,
             "sharpe_ratio": sharpe,
             "sortino_ratio": sortino,
-            "cagr": self.calculate_cagr(nav_series)
+            "downside_deviation": downside_dev,
+            "calmar_ratio": calmar,
+            "omega_ratio": omega,
+            "hurst_exponent": hurst,
+            "cagr": cagr
         }
+
+    def calculate_hurst(self, nav_series):
+        """
+        Calculate Hurst Exponent (H) to measure consistency/randomness.
+        H = 0.5: Random Walk
+        H < 0.5: Mean Reverting
+        H > 0.5: Persistent (Trending)
+        """
+        if nav_series.empty or len(nav_series) < 100:
+            return 0.5
+            
+        lags = range(2, 20)
+        # Convert to values to ignore index alignment
+        vals = nav_series.values
+        # Calculate the variance of the differences with different lags
+        tau = [np.sqrt(np.std(vals[lag:] - vals[:-lag])) for lag in lags]
+        # Calculate the slope of the log plot -> Hurst Exponent
+        poly = np.polyfit(np.log(lags), np.log(tau), 1)
+        return poly[0] * 2.0  # Corrections for log-volatility scaling
 
     def calculate_drawdowns(self, nav_series):
         """Calculate drawdown series and max drawdown."""
@@ -158,11 +217,22 @@ class MFAnalytics:
         correlation_matrix = np.corrcoef(b_excess, f_excess)
         correlation_xy = correlation_matrix[0,1]
         r_squared = correlation_xy**2
+
+        # Information Ratio
+        # (Fund Return - Bench Return) / Tracking Error
+        active_returns = f_ret - b_ret
+        tracking_error = active_returns.std() * np.sqrt(252)
+        info_ratio = (active_returns.mean() * 252) / tracking_error if tracking_error != 0 else 0
+
+        # Batting Average (Daily beating bench)
+        batting_avg = (f_ret > b_ret).mean() * 100
         
         return {
             "alpha": alpha_annual,
             "beta": beta,
-            "r_squared": r_squared
+            "r_squared": r_squared,
+            "info_ratio": info_ratio,
+            "batting_average": batting_avg
         }
 
     def calculate_fund_multiplier(self, nav_series):
