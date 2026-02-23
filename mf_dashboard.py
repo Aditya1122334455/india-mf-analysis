@@ -213,7 +213,7 @@ if selected_code:
             disp_cal = cal_df.copy()
             for col in disp_cal.columns:
                 disp_cal[col] = disp_cal[col].apply(lambda x: f"{x:.1%}" if pd.notnull(x) else "-")
-            st.dataframe(disp_cal, width='stretch', use_container_width=True)
+            st.dataframe(disp_cal, width='stretch')
             
         with cal_c2:
             # Display comparative bar chart
