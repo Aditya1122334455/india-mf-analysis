@@ -217,7 +217,9 @@ if selected_code:
             
         with cal_c2:
             # Display comparative bar chart
-            plot_cal_df = cal_df.reset_index().rename(columns={'index': 'Year'}).melt(id_vars='Year', var_name='Type', value_name='Return')
+            cal_df_plot = cal_df.copy()
+            cal_df_plot.index.name = 'Year'
+            plot_cal_df = cal_df_plot.reset_index().melt(id_vars='Year', var_name='Type', value_name='Return')
             fig_cal = px.bar(plot_cal_df, x='Year', y='Return', color='Type', barmode='group',
                              color_discrete_sequence=['#1f77b4', '#ff7f0e'],
                              labels={'Return': 'Annual Return', 'Year': ''},
