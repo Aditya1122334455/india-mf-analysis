@@ -371,7 +371,7 @@ if selected_code:
             st.markdown("#### 📜 Detailed Analysis Reports")
             df_full = pd.DataFrame(deep_metrics)
             
-            t1, t2 = st.tabs(["🎯 Risk-Adj Return", "⚖️ Market Character"])
+            t1, t2 = st.tabs(["📊 Risk Efficiency", "🧬 Style & Consistency"])
             
             with t1:
                 # Group 1: Risk-Adjusted Efficiency
@@ -388,7 +388,7 @@ if selected_code:
                         "Omega": st.column_config.TextColumn(help="Ratio of potential gains to potential losses. Considers the whole return distribution.")
                     }
                 )
-                st.caption("Focuses on how much return the fund generated per unit of various risk types.")
+                st.caption("Analysis of how effectively the fund delivers returns relative to its risk exposures.")
                 
             with t2:
                 # Group 2: Behavioral & Market Character
@@ -406,7 +406,7 @@ if selected_code:
                         "Downside Capture": st.column_config.TextColumn(help="Percentage of benchmark returns captured during negative market months. Lower is better.")
                     }
                 )
-                st.caption("Focuses on how the fund behaves relative to the market and its unique trading character.")
+                st.caption("Analysis of the fund's behavioral style, consistency, and active management character.")
         
         # 4. Rolling Returns Profile
         st.markdown("---")
