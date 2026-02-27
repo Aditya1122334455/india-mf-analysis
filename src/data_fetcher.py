@@ -9,24 +9,43 @@ class MFDataFetcher:
 
     def get_all_schemes(self):
         """Fetch all available schemes and cache them."""
-        if self._all_schemes is None:
-            self._all_schemes = self.mf.get_scheme_codes()
-        return self._all_schemes
+        try:
+            if self._all_schemes is None or len(self._all_schemes) < 100:
+                self._all_schemes = self.mf.get_scheme_codes()
+            return self._all_schemes
+        except Exception as e:
+            print(f"Error fetching scheme list: {e}")
+            return {}
 
     def search_funds(self, query):
         """Search for funds matching the query string."""
+        if not query: return {}
+        
         schemes = self.get_all_schemes()
+        if not schemes: return {}
+        
         results = {}
-        query_parts = query.lower().split()
+        # Clean query: lowercase and remove special chars that might hinder matching
+        clean_query = query.lower().replace("-", " ").replace(",", " ")
+        query_parts = clean_query.split()
         
         for code, name in schemes.items():
             # Skip header or empty
-            if not code or not name or code == 'Scheme Code':
+            if not code or not name or str(code).strip().lower() == 'scheme code':
                 continue
                 
-            name_str = str(name).lower()
+            name_str = str(name).lower().replace("-", " ").replace(",", " ")
+            # Try to match: either all parts are present, or the full query is partially present
             if all(part in name_str for part in query_parts):
                 results[code] = name
+        
+        # If no results and it's a single word, try partial matching
+        if not results and len(query_parts) == 1:
+            part = query_parts[0]
+            for code, name in schemes.items():
+                if part in str(name).lower():
+                    results[code] = name
+                    
         return results
 
     def get_nav_history(self, amfi_code):

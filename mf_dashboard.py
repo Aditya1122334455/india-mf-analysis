@@ -64,7 +64,12 @@ with st.sidebar:
             selected_name = st.selectbox("Matching Schemes", options=schemes, index=default_ix)
             selected_code = [k for k, v in search_results.items() if v == selected_name][0]
         else:
-            st.error("No funds found.")
+            total_count = len(fetcher.get_all_schemes())
+            st.error(f"No funds found matching '{search_query}'.")
+            if total_count < 1000:
+                st.warning(f"Note: Only {total_count} funds loaded. The underlying data source (AMFI) may be temporarily throttled. Please try again in 5 minutes.")
+            else:
+                st.info(f"System has {total_count} funds loaded. Try a broader search (e.g., 'HDFC' instead of 'HDFC Mid Cap').")
 
     st.markdown("---")
     st.header("⚙️ Analysis Settings")
