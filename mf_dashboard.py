@@ -68,7 +68,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.header("⚙️ Analysis Settings")
-    risk_free_rate = st.slider("Risk Free Rate (%)", 0.0, 10.0, 6.5, 0.1) / 100
+    risk_free_rate = st.slider("Risk Free Rate (%)", 0.0, 10.0, 5.3, 0.1) / 100
     analytics.rf = risk_free_rate
     
     bench_type = st.radio("Benchmark Type", ["Index", "Mutual Fund"], horizontal=True)
@@ -213,7 +213,7 @@ if selected_code:
             disp_cal = cal_df.copy()
             for col in disp_cal.columns:
                 disp_cal[col] = disp_cal[col].apply(lambda x: f"{x:.1%}" if pd.notnull(x) else "-")
-            st.dataframe(disp_cal, width='stretch')
+            st.dataframe(disp_cal, width='stretch', height=420)
             
         with cal_c2:
             # Display comparative bar chart
@@ -320,8 +320,8 @@ if selected_code:
                     "Batting Avg": f"{f_stats['BattingAvg']:.1f}%",
                     "Omega": f"{f_stats['Omega']:.2f}",
                     "Hurst (H)": f"{f_stats['Hurst']:.2f}",
-                    "Upside Cap": f"{f_stats['Upside']:.1f}%",
-                    "Downside Cap": f"{f_stats['Downside']:.1f}%"
+                    "Upside Capture": f"{f_stats['Upside']:.1f}%",
+                    "Downside Capture": f"{f_stats['Downside']:.1f}%"
                 })
 
         def display_metric_section(title, data_list, is_pct=True):
@@ -371,19 +371,42 @@ if selected_code:
             st.markdown("#### 📜 Detailed Analysis Reports")
             df_full = pd.DataFrame(deep_metrics)
             
-            t1, t2 = st.tabs(["🎯 Efficiency & Skill", "⚖️ Market Character"])
+            t1, t2 = st.tabs(["🎯 Risk-Adj Return", "⚖️ Market Character"])
             
             with t1:
                 # Group 1: Risk-Adjusted Efficiency
-                efficiency_cols = ["Period", "Sharpe", "Sortino", "Calmar", "Info Ratio", "Jensen Alpha", "Batting Avg"]
-                st.dataframe(df_full[efficiency_cols], hide_index=True, width='stretch')
-                st.caption("Focuses on how much return the fund generated per unit of risk taken.")
+                efficiency_cols = ["Period", "Sharpe", "Sortino", "Calmar", "Info Ratio", "Omega"]
+                st.dataframe(
+                    df_full[efficiency_cols], 
+                    hide_index=True, 
+                    width='stretch',
+                    column_config={
+                        "Sharpe": st.column_config.TextColumn(help="Excess return per unit of total risk. Higher is better."),
+                        "Sortino": st.column_config.TextColumn(help="Excess return per unit of downside risk. Better for asymmetric returns."),
+                        "Calmar": st.column_config.TextColumn(help="CAGR divided by Max Drawdown. Measures return relative to potential crash risk."),
+                        "Info Ratio": st.column_config.TextColumn(help="Manager performance relative to benchmark per unit of tracking error. Measures active skill."),
+                        "Omega": st.column_config.TextColumn(help="Ratio of potential gains to potential losses. Considers the whole return distribution.")
+                    }
+                )
+                st.caption("Focuses on how much return the fund generated per unit of various risk types.")
                 
             with t2:
                 # Group 2: Behavioral & Market Character
-                behavior_cols = ["Period", "Beta", "Hurst (H)", "Omega", "Upside Cap", "Downside Cap"]
-                st.dataframe(df_full[behavior_cols], hide_index=True, width='stretch')
-                st.caption("Focuses on how the fund behaves relative to the market and its trend intensity.")
+                behavior_cols = ["Period", "Beta", "Jensen Alpha", "Batting Avg", "Hurst (H)", "Upside Capture", "Downside Capture"]
+                st.dataframe(
+                    df_full[behavior_cols], 
+                    hide_index=True, 
+                    width='stretch',
+                    column_config={
+                        "Beta": st.column_config.TextColumn(help="Market sensitivity. 1.0 means it moves with the index. <1.0 is defensive, >1.0 is aggressive."),
+                        "Jensen Alpha": st.column_config.TextColumn(help="Annualized excess return above what is expected based on Beta. Measures manager's true skill."),
+                        "Batting Avg": st.column_config.TextColumn(help="Percentage of days/months the fund outperformed the benchmark. Measures consistency."),
+                        "Hurst (H)": st.column_config.TextColumn(help="Trend intensity. H > 0.5 is 'Persistence' (Trending), H < 0.5 is 'Anti-persistence' (Mean-reverting)."),
+                        "Upside Capture": st.column_config.TextColumn(help="Percentage of benchmark returns captured during positive market months. Higher is better."),
+                        "Downside Capture": st.column_config.TextColumn(help="Percentage of benchmark returns captured during negative market months. Lower is better.")
+                    }
+                )
+                st.caption("Focuses on how the fund behaves relative to the market and its unique trading character.")
         
         # 4. Rolling Returns Profile
         st.markdown("---")
