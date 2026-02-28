@@ -1,0 +1,16 @@
+name: Keep Streamlit App Alive
+on:
+  schedule:
+    - cron: '0 0 */3 * *'  # Runs at 00:00 every 3rd day
+  workflow_dispatch:      # Allows manually running it from the Actions tab
+
+jobs:
+  ping_app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send a request to the app
+        run: |
+          # Replace 'india-mf-analysis' with your actual app name if it differs
+          # The -I flag just gets headers (lighter/faster)
+          # The -L flag follows redirects
+          curl -I -L https://india-mf-analysis.streamlit.app/
