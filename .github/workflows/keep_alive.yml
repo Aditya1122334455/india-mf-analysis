@@ -1,19 +1,26 @@
 name: Keep Streamlit App Alive
+
 on:
   schedule:
-    - cron: '0 0 * * *'  # Runs daily at 00:00 UTC
-  workflow_dispatch:      # Allows manually running it from the Actions tab
+    - cron: '0 */6 * * *'  # Runs every 6 hours
+  workflow_dispatch:       # Allows manual triggering
 
 jobs:
-  ping_app:
+  wake-app:
     runs-on: ubuntu-latest
     steps:
-      - name: Send a request to the app
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
         run: |
-          # Use GET instead of HEAD (-I) and handle cookies to avoid redirect loops (exit 47)
-          # Also use the correct URL: https://india-fund.streamlit.app/
-          curl -L -v -b cookies.txt -c cookies.txt \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
-            https://india-fund.streamlit.app/ || echo "Ping finished with some issues, but wake-up signal sent."
+          pip install playwright
+          playwright install chromium
 
-
+      - name: Run wake-up script
+        run: python wake_app.py
