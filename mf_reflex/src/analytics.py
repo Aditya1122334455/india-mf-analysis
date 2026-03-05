@@ -193,13 +193,14 @@ class MFAnalytics:
         if hasattr(benchmark_nav, 'squeeze'):
             benchmark_nav = benchmark_nav.squeeze()
             
+        # Standardize index
         df = pd.DataFrame({'fund': fund_nav, 'bench': benchmark_nav}).dropna()
-        if len(df) < 20: return {"alpha": 0, "beta": 0, "r_squared": 0}
+        if len(df) < 20: return {"alpha": 0, "beta": 1, "r_squared": 0}
         
         f_ret = df['fund'].pct_change().dropna()
         b_ret = df['bench'].pct_change().dropna()
         
-        # Convert annual risk-free rate to daily (simple annualization for daily returns)
+        # Convert annual risk-free rate to daily
         daily_rf = self.rf / 252
         
         # Calculate daily excess returns
@@ -210,16 +211,14 @@ class MFAnalytics:
         beta, alpha_daily = np.polyfit(b_excess, f_excess, 1)
         
         # Annualize Alpha (Daily Alpha * 252)
-        # This gives the annualized risk-adjusted excess return
         alpha_annual = alpha_daily * 252
         
         # R-Squared
         correlation_matrix = np.corrcoef(b_excess, f_excess)
-        correlation_xy = correlation_matrix[0,1]
+        correlation_xy = correlation_matrix[0,1] if correlation_matrix.shape == (2,2) else 0
         r_squared = correlation_xy**2
 
         # Information Ratio
-        # (Fund Return - Bench Return) / Tracking Error
         active_returns = f_ret - b_ret
         tracking_error = active_returns.std() * np.sqrt(252)
         info_ratio = (active_returns.mean() * 252) / tracking_error if tracking_error != 0 else 0
@@ -233,6 +232,20 @@ class MFAnalytics:
             "r_squared": r_squared,
             "info_ratio": info_ratio,
             "batting_average": batting_avg
+        }
+
+    def calculate_deep_metrics(self, fund_nav, benchmark_nav):
+        """Helper for Reflex to get alpha, beta, and captures in one shot."""
+        ab = self.calculate_alpha_beta(fund_nav, benchmark_nav)
+        cap = self.calculate_capture_ratios(fund_nav, benchmark_nav)
+        rm = self.calculate_risk_metrics(fund_nav)
+        
+        return {
+            "Beta": ab["beta"],
+            "Jensen Alpha": ab["alpha"],
+            "Hurst (H)": rm.get("hurst_exponent", 0.5),
+            "Upside Capture": cap["upside"] / 100.0,
+            "Downside Capture": cap["downside"] / 100.0
         }
 
     def calculate_fund_multiplier(self, nav_series):

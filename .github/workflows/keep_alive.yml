@@ -1,7 +1,7 @@
 name: Keep Streamlit App Alive
 on:
   schedule:
-    - cron: '0 0 */3 * *'  # Runs at 00:00 every 3rd day
+    - cron: '0 0 * * *'  # Runs daily at 00:00 UTC
   workflow_dispatch:      # Allows manually running it from the Actions tab
 
 jobs:
@@ -10,7 +10,10 @@ jobs:
     steps:
       - name: Send a request to the app
         run: |
-          # Replace 'india-mf-analysis' with your actual app name if it differs
-          # The -I flag just gets headers (lighter/faster)
-          # The -L flag follows redirects
-          curl -I -L https://india-mf-analysis.streamlit.app/
+          # Use GET instead of HEAD (-I) and handle cookies to avoid redirect loops (exit 47)
+          # Also use the correct URL: https://india-fund.streamlit.app/
+          curl -L -v -b cookies.txt -c cookies.txt \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" \
+            https://india-fund.streamlit.app/ || echo "Ping finished with some issues, but wake-up signal sent."
+
+
